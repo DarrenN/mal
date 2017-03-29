@@ -1,4 +1,6 @@
 #lang racket
+(require readline/readline
+         readline/pread)
 
 (define (READ s) s)
 (define (EVAL s) s)
@@ -6,9 +8,10 @@
 
 (define (rep s) ((compose PRINT EVAL READ) s))
 
-(define (repl)
-  (printf "user> ")
-  (printf "~a\n" (rep (read-line)))
-  (repl))
+(define (repl-loop)
+  (let ([line (readline "user> ")])
+    (add-history line)
+    (printf "~a~n" (rep line)))
+  (repl-loop))
 
-(repl)
+(repl-loop)
