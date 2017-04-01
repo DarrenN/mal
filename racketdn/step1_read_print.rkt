@@ -1,10 +1,12 @@
 #lang racket
 
-(require readline/readline)
+(require readline/readline
+         "reader.rkt"
+         "printer.rkt")
 
-(define (READ s) s)
+(define (READ s) (read-string s))
 (define (EVAL s) s)
-(define (PRINT s) s)
+(define (PRINT s) (print-string s))
 
 (define (rep s) ((compose PRINT EVAL READ) s))
 

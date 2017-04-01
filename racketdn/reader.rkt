@@ -2,6 +2,8 @@
 (require racket/match
          "types.rkt")
 
+(provide read-string)
+
 (define TOKENS (pregexp "[\\s,]*(~@|[\\[\\]{}()'`~^@]|\"(?:\\\\.|[^\\\\\"])*\"|;.*|[^\\s\\[\\]{}('\"`,;)]*)"))
 (define LEFTPAREN "(")
 (define RIGHTPAREN ")")
@@ -29,24 +31,46 @@
   (read-form (reader-syntax (tokenizer str) 0)))
 
 (define (read-list stx)
-  (let ([v (next stx)])
-    (define (loop stx last out)
+  (define (loop out)
+    (let ([v (read-form stx)])
       (cond
-        [(and (eof-object? (peek stx)) (not (equal? RIGHTPAREN last)))
-         (raise "EOF before list end")]
-        [(eof-object? (peek stx)) (reverse out)]
-        [else (loop stx (peek stx) (cons (read-form stx) out))]))
-    (loop stx v (list v))))
+        [(match-leftparens? v) (loop out)]
+        [(match-rightparens? v) (List (reverse out))]
+        [(eof-object? v) (List (reverse out))]
+        [else (loop (cons v out))])))
+  (next stx)
+  (loop '()))
+
+(define (match-numbers? val)
+  (if (string? val)
+      (regexp-match-exact? (pregexp "\\d+") val)
+      #f))
+
+(define (match-leftparens? val)
+  (if (string? val)
+      (regexp-match-exact? #rx"\\[|\\(" val)
+      #f))
+
+(define (match-rightparens? val)
+  (if (string? val)
+      (regexp-match-exact? #rx"\\]|\\)" val)
+      #f))
 
 (define (read-atom stx)
-  (next stx))
+  (let ([val (next stx)])
+    (cond
+      [(match-rightparens? val) val]
+      [(eof-object? val) eof]
+      [(match-numbers? val) (Number (string->number val))]
+      [else (Symbol (string->symbol val))])))
 
 (define (read-form stx)
   (let ([x (peek stx)])
-    (if (equal? LEFTPAREN x)
+    (if (match-leftparens? x)
         (read-list stx)
         (read-atom stx))))
 
-
-(define s (read-string "true"))
-s
+#|
+(define s (read-string "(123 4556 (abc))"))
+(println s)
+|#
