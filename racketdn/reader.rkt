@@ -1,76 +1,79 @@
 #lang racket
-(require racket/match
-         "types.rkt")
+(require "types.rkt")
 
 (provide read-string)
 
-(define TOKENS (pregexp "[\\s,]*(~@|[\\[\\]{}()'`~^@]|\"(?:\\\\.|[^\\\\\"])*\"|;.*|[^\\s\\[\\]{}('\"`,;)]*)"))
-(define LEFTPAREN "(")
-(define RIGHTPAREN ")")
-
 (struct reader-syntax (tokens [position #:mutable]) #:transparent)
+
+(define (tokenizer str)
+  (filter-not (λ (s) (equal? s ""))
+              (regexp-match* TOKENS str #:match-select cadr)))
 
 (define (next stx)
   (let* ([position (reader-syntax-position stx)]
-         [token (if (>= position (- (length (reader-syntax-tokens stx)) 1))
-                    eof
+         [token (if (>= position (length (reader-syntax-tokens stx)))
+                    null
                     (list-ref (reader-syntax-tokens stx) position))])
     (set-reader-syntax-position! stx (+ position 1))
     token))
 
 (define (peek stx)
   (let ([position (reader-syntax-position stx)])
-    (if (>= position (- (length (reader-syntax-tokens stx)) 1))
-        eof
+    (if (>= position (length (reader-syntax-tokens stx)))
+        null
         (list-ref (reader-syntax-tokens stx) position))))
-
-(define (tokenizer str)
-  (regexp-match* TOKENS str #:match-select cadr))
 
 (define (read-string str)
   (read-form (reader-syntax (tokenizer str) 0)))
 
-(define (read-list stx)
-  (define (loop out)
-    (let ([v (read-form stx)])
-      (cond
-        [(match-leftparens? v) (loop out)]
-        [(match-rightparens? v) (List (reverse out))]
-        [(eof-object? v) (List (reverse out))]
-        [else (loop (cons v out))])))
-  (next stx)
-  (loop '()))
+(define (read-form reader)
+  (let ([token (peek reader)])
+    (if (null? token)
+        (raise (make-blank-exn "blank line" (current-continuation-marks)))
+        (cond
+          [(equal? LPAR token) (read-list reader LPAR RPAR)]
+          [(equal? LVEC token) (list->vector (read-list reader LVEC RVEC))]
+          [(equal? LMAP token) (apply hasheq (read-list reader LMAP RMAP))]
+          [(equal? QUOTE token)
+           (next reader) (list 'quote (read-form reader))]
+          [(equal? QUASI token)
+           (next reader) (list 'quasiquote (read-form reader))]
+          [(equal? UNQUO token)
+           (next reader) (list 'unquote (read-form reader))]
+          [(equal? SPLICE token)
+           (next reader) (list 'splice (read-form reader))]
+          [else (read-atom reader)]))))
 
-(define (match-numbers? val)
-  (if (string? val)
-      (regexp-match-exact? (pregexp "\\d+") val)
-      #f))
-
-(define (match-leftparens? val)
-  (if (string? val)
-      (regexp-match-exact? #rx"\\[|\\(" val)
-      #f))
-
-(define (match-rightparens? val)
-  (if (string? val)
-      (regexp-match-exact? #rx"\\]|\\)" val)
-      #f))
-
-(define (read-atom stx)
-  (let ([val (next stx)])
+(define (read-atom reader)
+  (let ([token (next reader)])
     (cond
-      [(match-rightparens? val) val]
-      [(eof-object? val) eof]
-      [(match-numbers? val) (Number (string->number val))]
-      [else (Symbol (string->symbol val))])))
+      [(regexp-match #px"^-?[0-9.]+$" token) (string->number token)]
+      [(regexp-match #px"\"(?:\\\\.|[^\\\\\"])*" token)
+       (regexp-match #px"^\".*\"$" token)
+           (string-replace
+             (string-replace
+               (string-replace
+                 (substring token 1 (- (string-length token) 1))
+                 "\\\"" "\"")
+               "\\n" "\n")
+             "\\\\" "\\")]
+      [(string-prefix? token KW)
+       (string->symbol (string-replace token KW KWSYM))]
+      [else (string->symbol token)])))
 
-(define (read-form stx)
-  (let ([x (peek stx)])
-    (if (match-leftparens? x)
-        (read-list stx)
-        (read-atom stx))))
 
-#|
-(define s (read-string "(123 4556 (abc))"))
-(println s)
-|#
+(define (read-list-entries reader end)
+  (let ([token (peek reader)])
+    (cond
+        [(eq? token '()) (raise (string-append "expected '" end "'"))]
+        [(equal? end token) '()]
+        [else
+          (cons (read-form reader) (read-list-entries reader end))])))
+
+(define (read-list reader start end)
+  (let ([token (next reader)])
+    (if (equal? start token)
+      (let ([lst (read-list-entries reader end)])
+        (next reader)
+        lst)
+      (raise (string-append "expected '" start "'")))))

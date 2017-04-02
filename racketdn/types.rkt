@@ -1,11 +1,20 @@
 #lang racket
 
-(provide (struct-out Number)
-         (struct-out Symbol)
-         (struct-out List))
+(provide blank-exn? make-blank-exn TOKENS LPAR RPAR QUOTE QUASI UNQUO SPLICE
+         KW KWSYM LVEC RVEC LMAP RMAP)
 
-(struct Number (value) #:transparent)
+(define TOKENS (pregexp "[\\s,]*(~@|[\\[\\]{}()'`~^@]|\"(?:\\\\.|[^\\\\\"])*\"|;.*|[^\\s\\[\\]{}('\"`,;)]*)"))
+(define LPAR "(")
+(define RPAR ")")
+(define LVEC "[")
+(define RVEC "]")
+(define LMAP "{")
+(define RMAP "}")
+(define QUOTE "'")
+(define QUASI "`")
+(define UNQUO "~")
+(define SPLICE "~@")
+(define KW ":")
+(define KWSYM "\u29e")
 
-(struct Symbol (value) #:transparent)
-
-(struct List (value) #:transparent)
+(define-struct (blank-exn exn:fail:user) ())
