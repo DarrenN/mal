@@ -28,7 +28,7 @@
 
 (define (read-form reader)
   (let ([token (peek reader)])
-    (if (null? token)
+    (if (or (null? token) (string-prefix? token COMM))
         (raise (make-blank-exn "blank line" (current-continuation-marks)))
         (cond
           [(equal? LPAR token) (read-list reader LPAR RPAR)]
@@ -41,7 +41,9 @@
           [(equal? UNQUO token)
            (next reader) (list 'unquote (read-form reader))]
           [(equal? SPLICE token)
-           (next reader) (list 'splice (read-form reader))]
+           (next reader) (list 'splice-unquote (read-form reader))]
+          [(equal? DEREF token)
+           (next reader) (list 'deref (read-form reader))]
           [else (read-atom reader)]))))
 
 (define (read-atom reader)
