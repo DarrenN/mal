@@ -8,8 +8,8 @@
 (define repl-env (hasheq
                   '+ (λ (a . b) (apply + (cons a b)))
                   '- (λ (a . b) (apply - (cons a b)))
-                  '* (λ (a . b) (* a b))
-                  '/ (λ (a . b) (exact->inexact (/ a b)))))
+                  '* (λ (a . b) (apply * (cons a b)))
+                  '/ (λ (a . b) (apply / (cons a b)))))
 
 (define (eval-ast ast env)
   (cond
@@ -17,6 +17,9 @@
                        (hash-ref env ast)
                        (raise (format "symbol ~a not found" ast)))]
     [(list? ast) (map (λ (i) (EVAL i env)) ast)]
+    [(vector? ast) (vector-map (λ (i) (EVAL i env)) ast)]
+    [(hash? ast) (for/hash ([k (hash-keys ast)])
+                   (values k (EVAL (hash-ref ast k) env)))]
     [else ast]))
 
 (define (READ s) (read-string s))
