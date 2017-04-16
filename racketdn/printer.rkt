@@ -27,6 +27,7 @@
     [(hash? token)
      (string-join (map print-string (flatten-hash token))
                   #:before-first LMAP #:after-last RMAP)]
+    [(void? token) null]
     [else (~a token)]))
 
 (define (handle-symbol sym)
